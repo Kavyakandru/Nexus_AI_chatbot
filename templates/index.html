@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nexus AI — Next-Gen Intelligence</title>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+    <!-- Highlight.js CSS for Code Highlighting -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/tokyo-night-dark.min.css" id="highlight-theme">
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+
+<div class="app-layout">
+
+    <!-- Mobile Overlay -->
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+    <!-- ================= SIDEBAR ================= -->
+    <aside class="sidebar" id="sidebar">
+
+        <!-- Sidebar Header -->
+        <div class="sidebar-header">
+            <div class="brand">
+                <div class="logo-icon">
+                    <i class="fa-solid fa-brain"></i>
+                </div>
+                <div class="brand-text">
+                    <span class="brand-name">Nexus AI</span>
+                    <span class="brand-badge">PRO</span>
+                </div>
+            </div>
+            <button class="icon-btn close-sidebar-btn" id="closeSidebarBtn" title="Close Sidebar">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+
+        <!-- New Chat Button -->
+        <button class="new-chat-btn" id="newChatBtn">
+            <i class="fa-solid fa-plus"></i>
+            <span>New Chat</span>
+            <kbd class="shortcut-key">Ctrl+N</kbd>
+        </button>
+
+        <!-- Search Bar -->
+        <div class="search-box">
+            <i class="fa-solid fa-magnifying-glass search-icon"></i>
+            <input type="text" id="searchInput" placeholder="Search conversations...">
+            <button class="clear-search-btn" id="clearSearchBtn" style="display: none;">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>
+
+        <!-- Chat History List -->
+        <div class="history-container">
+            <div class="history-label">
+                <span>Recent Conversations</span>
+            </div>
+            <div class="history-list" id="historyList">
+                <!-- Loaded dynamically -->
+            </div>
+        </div>
+
+        <!-- Sidebar Footer -->
+        <div class="sidebar-footer">
+            <div class="footer-actions">
+                <button class="footer-btn" id="clearAllBtn" title="Clear All Chats">
+                    <i class="fa-solid fa-trash-can"></i>
+                    <span>Clear All Chats</span>
+                </button>
+                <button class="footer-btn theme-toggle-btn" id="themeToggleBtn" title="Toggle Theme">
+                    <i class="fa-solid fa-moon" id="themeIcon"></i>
+                    <span id="themeLabel">Dark Mode</span>
+                </button>
+            </div>
+            <div class="user-profile">
+                <div class="avatar user-avatar-small">
+                    <i class="fa-solid fa-user"></i>
+                </div>
+                <div class="user-info">
+                    <span class="user-name">Pro Workspace</span>
+                    <span class="user-status"><i class="fa-solid fa-circle online-dot"></i> Gemini 2.5 Active</span>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- ================= MAIN CHAT ================= -->
+    <main class="main-chat">
+
+        <!-- Top Header Bar -->
+        <header class="top-header">
+            <div class="header-left">
+                <button class="icon-btn toggle-sidebar-btn" id="openSidebarBtn" title="Toggle Sidebar">
+                    <i class="fa-solid fa-bars-staggered"></i>
+                </button>
+                <div class="active-chat-info">
+                    <h2 id="activeChatTitle">New Chat</h2>
+                    <span class="model-badge">
+                        <i class="fa-solid fa-bolt"></i> Gemini 2.5 Flash
+                    </span>
+                </div>
+            </div>
+
+            <div class="header-right">
+                <button class="icon-btn header-action-btn" id="headerNewChatBtn" title="New Chat">
+                    <i class="fa-solid fa-pen-to-square"></i>
+                </button>
+                <button class="icon-btn header-action-btn" id="headerThemeBtn" title="Toggle Theme">
+                    <i class="fa-solid fa-sun"></i>
+                </button>
+            </div>
+        </header>
+
+        <!-- Chat Container -->
+        <div class="chat-container" id="chatContainer">
+
+            <!-- Welcome Screen (Visible on empty chat) -->
+            <div class="welcome-screen" id="welcomeScreen">
+                <div class="welcome-badge">
+                    <i class="fa-solid fa-sparkles"></i> Powered by Next-Gen AI
+                </div>
+                <h1 class="welcome-title">Where curiosity meets intelligence.</h1>
+                <p class="welcome-subtitle">Ask anything, analyze documents, review code, or explore complex ideas with full multimodal AI power.</p>
+
+                <div class="suggestion-grid">
+                    <div class="suggestion-card" data-prompt="Analyze code structure and write clean unit tests for python functions.">
+                        <div class="card-icon"><i class="fa-solid fa-code"></i></div>
+                        <div class="card-content">
+                            <h4>Code & Refactor</h4>
+                            <p>Write, review, or debug Python & JavaScript code</p>
+                        </div>
+                    </div>
+
+                    <div class="suggestion-card" data-prompt="Summarize attached PDF document and extract key takeaways.">
+                        <div class="card-icon"><i class="fa-solid fa-file-invoice"></i></div>
+                        <div class="card-content">
+                            <h4>Analyze Documents</h4>
+                            <p>Upload PDFs, TXT, or CSV files for instant insights</p>
+                        </div>
+                    </div>
+
+                    <div class="suggestion-card" data-prompt="Explain quantum computing concepts in simple terms with real-life analogies.">
+                        <div class="card-icon"><i class="fa-solid fa-lightbulb"></i></div>
+                        <div class="card-content">
+                            <h4>Learn & Explain</h4>
+                            <p>Break down complex topics into clear explanations</p>
+                        </div>
+                    </div>
+
+                    <div class="suggestion-card" data-prompt="Help me outline a comprehensive product strategy for a SaaS application.">
+                        <div class="card-icon"><i class="fa-solid fa-rocket"></i></div>
+                        <div class="card-content">
+                            <h4>Brainstorm Strategy</h4>
+                            <p>Develop plans, summaries, and creative ideas</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Messages Stream Container -->
+            <div class="messages-wrapper" id="messagesWrapper">
+                <div class="messages-list" id="messagesList"></div>
+            </div>
+
+            <!-- Typing Indicator -->
+            <div class="typing-indicator" id="typingIndicator" style="display: none;">
+                <div class="bot-avatar-small">
+                    <i class="fa-solid fa-brain"></i>
+                </div>
+                <div class="typing-content">
+                    <span class="typing-text">Nexus AI is processing</span>
+                    <div class="typing-dots">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- ================= INPUT WRAPPER ================= -->
+        <div class="input-container-wrapper">
+
+            <!-- File Attachment Previews Bar -->
+            <div class="file-previews-bar" id="filePreviewsBar" style="display: none;">
+                <div class="previews-list" id="previewsList"></div>
+            </div>
+
+            <!-- Main Input Bar -->
+            <div class="input-box" id="inputBox">
+                <!-- File Input (Hidden) -->
+                <input type="file" id="fileInput" multiple accept="image/*,.pdf,.txt,.md,.py,.js,.json,.csv,.html,.css,.cpp,.java,.sql" style="display: none;">
+
+                <button class="attach-btn" id="attachBtn" title="Attach file (Images, PDF, Text, Code)">
+                    <i class="fa-solid fa-paperclip"></i>
+                </button>
+
+                <textarea
+                    id="messageInput"
+                    placeholder="Ask Nexus AI anything, or attach files..."
+                    rows="1"
+                    autocomplete="off"></textarea>
+
+                <button class="send-btn" id="sendBtn" title="Send message">
+                    <i class="fa-solid fa-arrow-up"></i>
+                </button>
+            </div>
+
+            <div class="input-footer">
+                <span>Nexus AI can analyze files & code. Double check important information.</span>
+            </div>
+        </div>
+
+    </main>
+
+</div>
+
+<!-- Rename Modal -->
+<div class="modal-backdrop" id="renameModal">
+    <div class="modal-card">
+        <div class="modal-header">
+            <h3>Rename Conversation</h3>
+            <button class="icon-btn" id="closeRenameModalBtn"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="modal-body">
+            <input type="text" id="renameInput" placeholder="Enter title...">
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" id="cancelRenameBtn">Cancel</button>
+            <button class="btn btn-primary" id="confirmRenameBtn">Save Title</button>
+        </div>
+    </div>
+</div>
+
+<!-- Clear Confirm Modal -->
+<div class="modal-backdrop" id="clearModal">
+    <div class="modal-card">
+        <div class="modal-header">
+            <h3>Clear All Conversations?</h3>
+            <button class="icon-btn" id="closeClearModalBtn"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="modal-body">
+            <p>This action cannot be undone. All your chat history and saved messages will be permanently deleted.</p>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" id="cancelClearBtn">Cancel</button>
+            <button class="btn btn-danger" id="confirmClearBtn">Delete All</button>
+        </div>
+    </div>
+</div>
+
+<!-- JavaScript Libraries -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.0/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+
+<!-- Application JavaScript -->
+<script src="{{ url_for('static', filename='js/script.js') }}"></script>
+
+</body>
+</html>
