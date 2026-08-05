@@ -19,11 +19,12 @@ __pycache__/
 *.py[cod]
 
 # =========================
-# SQLite Database
+# SQLite Database & Uploads
 # =========================
 *.db
 *.sqlite
 *.sqlite3
+uploads/
 
 # =========================
 # IDE / Editor Files

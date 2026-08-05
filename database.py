@@ -1,11 +1,31 @@
+import os
 import sqlite3
 import json
+import tempfile
 from datetime import datetime
 
-DATABASE = "database.db"
+# Determine database path (Use /tmp on Vercel or read-only filesystems)
+def get_db_path():
+    if os.getenv("VERCEL"):
+        return os.path.join(tempfile.gettempdir(), "database.db")
+    
+    # Local check for write permissions
+    local_db = os.path.join(os.path.dirname(__file__), "database.db")
+    try:
+        # Test if we can open/write to directory
+        test_file = os.path.join(os.path.dirname(__file__), ".write_test")
+        with open(test_file, "w") as f:
+            f.write("1")
+        os.remove(test_file)
+        return local_db
+    except Exception:
+        return os.path.join(tempfile.gettempdir(), "database.db")
+
+DATABASE = get_db_path()
 
 def get_connection():
-    conn = sqlite3.connect(DATABASE)
+    db_path = get_db_path()
+    conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     return conn
 

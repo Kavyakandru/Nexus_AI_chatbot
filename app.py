@@ -1,6 +1,7 @@
 import os
 import json
 import uuid
+import tempfile
 import mimetypes
 from flask import Flask, render_template, request, jsonify, send_from_directory
 from werkzeug.utils import secure_filename
@@ -20,25 +21,46 @@ from database import (
 )
 
 app = Flask(__name__)
-app.config["UPLOAD_FOLDER"] = os.path.join(app.root_path, "uploads")
+
+# Determine Upload Folder (Use /tmp on Vercel / serverless environment)
+def get_upload_folder():
+    if os.getenv("VERCEL"):
+        folder = os.path.join(tempfile.gettempdir(), "uploads")
+    else:
+        try:
+            folder = os.path.join(app.root_path, "uploads")
+            os.makedirs(folder, exist_ok=True)
+            return folder
+        except Exception:
+            folder = os.path.join(tempfile.gettempdir(), "uploads")
+    os.makedirs(folder, exist_ok=True)
+    return folder
+
+app.config["UPLOAD_FOLDER"] = get_upload_folder()
 app.config["MAX_CONTENT_LENGTH"] = 32 * 1024 * 1024  # 32MB max upload
 
-os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
+# Initialize Database safely
+try:
+    create_tables()
+except Exception as db_err:
+    print(f"Database initialization warning: {db_err}")
 
-# ----------------------------
-# Gemini Client
-# ----------------------------
-client = genai.Client(api_key=API_KEY)
-
-# Initialize Database
-create_tables()
+# Helper: Get Gemini Client safely
+def get_gemini_client():
+    key = os.getenv("GEMINI_API_KEY") or API_KEY
+    if not key:
+        return None
+    try:
+        return genai.Client(api_key=key)
+    except Exception as e:
+        print(f"Error creating GenAI client: {e}")
+        return None
 
 
 # Helper: Extract text from uploaded non-image files
 def extract_file_text(filepath, filename):
     ext = os.path.splitext(filename)[1].lower()
 
-    # Plain text / Code / Data files
     if ext in [".txt", ".md", ".py", ".js", ".json", ".csv", ".html", ".css", ".c", ".cpp", ".java", ".sql", ".xml", ".yaml", ".yml"]:
         try:
             with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
@@ -46,7 +68,6 @@ def extract_file_text(filepath, filename):
         except Exception as e:
             return f"[Error reading file: {str(e)}]"
 
-    # PDF files
     elif ext == ".pdf":
         try:
             import pypdf
@@ -64,7 +85,9 @@ def extract_file_text(filepath, filename):
 
 
 # Helper: Auto Generate Chat Title
-def generate_chat_title(first_message):
+def generate_chat_title(client, first_message):
+    if not client:
+        return "New Chat"
     try:
         title_prompt = f"Summarize this initial user request into a clean, concise chat title (max 5 words, no quotes, no period):\n\n'{first_message}'"
         res = client.models.generate_content(
@@ -75,6 +98,15 @@ def generate_chat_title(first_message):
         return clean_title if clean_title else "New Chat"
     except Exception:
         return "New Chat"
+
+
+# Ensure DB tables exist on first request if serverless cold started
+@app.before_request
+def ensure_db():
+    try:
+        create_tables()
+    except Exception:
+        pass
 
 
 # ----------------------------
@@ -99,7 +131,8 @@ def upload_file():
 
     filename = secure_filename(file.filename)
     unique_name = f"{uuid.uuid4().hex[:8]}_{filename}"
-    filepath = os.path.join(app.config["UPLOAD_FOLDER"], unique_name)
+    upload_dir = get_upload_folder()
+    filepath = os.path.join(upload_dir, unique_name)
     file.save(filepath)
 
     size = os.path.getsize(filepath)
@@ -125,7 +158,7 @@ def upload_file():
 # ----------------------------
 @app.route("/uploads/<filename>")
 def uploaded_file(filename):
-    return send_from_directory(app.config["UPLOAD_FOLDER"], filename)
+    return send_from_directory(get_upload_folder(), filename)
 
 
 # ----------------------------
@@ -148,7 +181,7 @@ def new_chat():
 @app.route("/chat", methods=["POST"])
 def chat():
     try:
-        data = request.get_json()
+        data = request.get_json() or {}
         chat_id = data.get("chat_id")
         user_message = data.get("message", "").strip()
         attached_files = data.get("files", [])
@@ -156,13 +189,18 @@ def chat():
         if not user_message and not attached_files:
             return jsonify({"response": "Please enter a message or attach a file."}), 400
 
+        client = get_gemini_client()
+        if not client:
+            return jsonify({
+                "response": "⚠️ GEMINI_API_KEY is not configured on Vercel environment variables. Please add GEMINI_API_KEY in Vercel Settings -> Environment Variables."
+            }), 200
+
         # Auto-create chat if no chat_id
         is_first_msg = False
         if not chat_id:
             chat_id = create_chat("New Chat")
             is_first_msg = True
         else:
-            # Check if this chat has no messages yet
             existing = get_messages(chat_id)
             if len(existing) == 0:
                 is_first_msg = True
@@ -170,15 +208,13 @@ def chat():
         # Save user message
         save_message(chat_id, "user", user_message, attached_files)
 
-        # Build context from previous messages (up to last 10 messages)
+        # Build context from previous messages
         history_msgs = get_messages(chat_id)
-        # Exclude the very last message we just saved
         previous_history = history_msgs[:-1] if len(history_msgs) > 1 else []
 
         # Prepare Gemini Request Contents
         content_parts = []
 
-        # Add brief conversation context if previous messages exist
         if previous_history:
             context_str = "Prior Conversation Context:\n"
             for m in previous_history[-8:]:
@@ -187,12 +223,13 @@ def chat():
             content_parts.append(context_str + "\n---\n")
 
         # Process Attached Files
+        upload_dir = get_upload_folder()
         if attached_files:
             content_parts.append("Attached Files provided by User:")
             for file_info in attached_files:
                 fname = file_info.get("filename")
                 orig_name = file_info.get("original_name", fname)
-                fpath = os.path.join(app.config["UPLOAD_FOLDER"], fname)
+                fpath = os.path.join(upload_dir, fname)
 
                 if os.path.exists(fpath):
                     mime = file_info.get("mime_type", "")
@@ -209,11 +246,9 @@ def chat():
                         if extracted_text:
                             content_parts.append(f"\n--- File Content ({orig_name}) ---\n{extracted_text}\n--- End File Content ---")
 
-        # Add current user message
         if user_message:
             content_parts.append(f"User Request: {user_message}")
 
-        # System Instruction
         system_instruction = (
             "You are Nexus AI, an advanced, highly intelligent, helpful AI assistant built by Google DeepMind technology. "
             "Respond accurately, clearly, and comprehensively in GitHub-flavored Markdown. "
@@ -221,7 +256,6 @@ def chat():
             "If analyzing files, refer to the file contents provided accurately."
         )
 
-        # Generate Response using Gemini
         response = client.models.generate_content(
             model="gemini-2.5-flash",
             contents=content_parts,
@@ -232,14 +266,12 @@ def chat():
 
         bot_reply = response.text if response.text else "I processed your request, but received no text output."
 
-        # Save bot response
         save_message(chat_id, "bot", bot_reply)
 
-        # Auto-update chat title on first message
         chat_title = None
         if is_first_msg:
             title_source = user_message if user_message else (attached_files[0]["original_name"] if attached_files else "New Chat")
-            chat_title = generate_chat_title(title_source)
+            chat_title = generate_chat_title(client, title_source)
             update_chat_title(chat_id, chat_title)
 
         return jsonify({
@@ -305,7 +337,7 @@ def clear_all():
 
 
 # ----------------------------
-# Run App
+# Run App locally
 # ----------------------------
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
